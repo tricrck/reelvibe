@@ -15,9 +15,27 @@ interface SitemapUrl {
   }
 }
 
+interface VideosResponse {
+  data: {
+    id: string
+    title: string
+    description: string
+    thumb_url: string
+    stream_url: string
+    updated_at: string
+  }[]
+  error: null | unknown
+  total: number
+  page: number
+  limit: number
+}
+
 export default defineEventHandler(async (event) => {
   const config = useRuntimeConfig()
   const baseUrl = config.public.siteUrl || 'https://reelvibe.eu.cc'
+  const supabaseUrl = config.public.supabaseUrl
+  const supabaseAnonKey = config.public.supabaseAnonKey
+  const FUNCTION_URL = `${supabaseUrl}/functions/v1`
 
   const urls: SitemapUrl[] = []
 
@@ -36,25 +54,43 @@ export default defineEventHandler(async (event) => {
     })
   })
 
-  // Fetch videos from Supabase if available
-  if (config.public.supabaseUrl && config.public.supabaseAnonKey) {
+  // Fetch all videos via edge function (paginated)
+  if (supabaseUrl && supabaseAnonKey) {
     try {
-      const supabase = createClient(
-        config.public.supabaseUrl,
-        config.public.supabaseAnonKey
-      )
+      const fetchPage = async (page: number): Promise<VideosResponse> => {
+        const params = new URLSearchParams({
+          page: String(page),
+          sort: 'downloads',
+          limit: '100'          // bump if your function supports it
+        })
+        const res = await fetch(`${FUNCTION_URL}/videos-api?${params}`)
+        return res.json()
+      }
 
-      const { data: videos, error } = await supabase
-        .from('videos')
-        .select('id, title, description, thumb_url, stream_url, updated_at')
-        .order('downloads', { ascending: false })
-        .limit(1000)
+      // Fetch first page to get total count
+      const firstPage = await fetchPage(1)
 
-      if (!error && videos) {
-        videos.forEach(video => {
+      if (!firstPage.error && firstPage.data) {
+        const totalPages = Math.ceil(firstPage.total / firstPage.limit)
+
+        // Collect remaining pages in parallel (cap at 10 pages → 1000 videos)
+        const remainingPages = Array.from(
+          { length: Math.min(totalPages - 1, 9) },
+          (_, i) => fetchPage(i + 2)
+        )
+        const restResults = await Promise.all(remainingPages)
+
+        const allVideos = [
+          ...firstPage.data,
+          ...restResults.flatMap(r => r.data ?? [])
+        ]
+
+        allVideos.forEach(video => {
           urls.push({
             loc: `${baseUrl}/watch/${video.id}`,
-            lastmod: video.updated_at ? new Date(video.updated_at).toISOString().split('T')[0] : undefined,
+            lastmod: video.updated_at
+              ? new Date(video.updated_at).toISOString().split('T')[0]
+              : undefined,
             changefreq: 'weekly',
             priority: 0.7,
             video: {
@@ -68,7 +104,7 @@ export default defineEventHandler(async (event) => {
         })
       }
     } catch (err) {
-      console.error('Sitemap: Failed to fetch videos from Supabase:', err)
+      console.error('Sitemap: Failed to fetch videos from edge function:', err)
     }
   }
 
@@ -80,17 +116,9 @@ ${urls.map(url => {
   let urlXml = `  <url>
     <loc>${escapeXml(url.loc)}</loc>`
 
-  if (url.lastmod) {
-    urlXml += `\n    <lastmod>${url.lastmod}</lastmod>`
-  }
-
-  if (url.changefreq) {
-    urlXml += `\n    <changefreq>${url.changefreq}</changefreq>`
-  }
-
-  if (url.priority !== undefined) {
-    urlXml += `\n    <priority>${url.priority}</priority>`
-  }
+  if (url.lastmod) urlXml += `\n    <lastmod>${url.lastmod}</lastmod>`
+  if (url.changefreq) urlXml += `\n    <changefreq>${url.changefreq}</changefreq>`
+  if (url.priority !== undefined) urlXml += `\n    <priority>${url.priority}</priority>`
 
   if (url.video) {
     urlXml += `\n    <video:video>
