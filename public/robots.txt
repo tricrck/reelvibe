@@ -1,2 +1,13 @@
-User-Agent: *
-Disallow:
+# https://www.robotstxt.org/robotstxt.html
+User-agent: *
+Allow: /
+
+# Sitemap
+Sitemap: https://reelvibe.eu.cc/sitemap.xml
+
+# Crawl-delay for polite bots
+Crawl-delay: 1
+
+# Disallow unnecessary paths
+Disallow: /api/
+Disallow: /_nuxt/

@@ -1,120 +1,210 @@
 <template>
   <div>
-    <section class="mb-12">
-      <div class="flex items-center justify-between mb-8">
-        <div>
-          <h1 class="text-3xl font-bold text-white">
-            <span v-if="searchQuery" class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              Search: "{{ searchQuery }}"
-            </span>
-            <span v-else class="bg-gradient-to-r from-purple-400 to-pink-400 bg-clip-text text-transparent">
-              {{ sortLabel }}
-            </span>
-          </h1>
-          <p class="text-gray-400 mt-2">
-            <span v-if="total > 0">{{ total }} videos available</span>
-            <span v-else>Loading...</span>
-          </p>
-        </div>
 
-        <div class="flex items-center gap-2">
-          <label class="text-sm text-gray-400">Sort by:</label>
-          <select
-            v-model="sortOption"
-            class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-200 focus:outline-none focus:border-purple-500"
-          >
-            <option value="downloads">Popular</option>
-            <option value="created_at">Recent</option>
-            <option value="title">A-Z</option>
-          </select>
-        </div>
+    <!-- SORT TABS -->
+    <div class="flex items-center gap-2 mb-6 overflow-x-auto no-scrollbar pb-1">
+      <button
+        v-for="tab in sortTabs"
+        :key="tab.value"
+        @click="setSortOption(tab.value)"
+        class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-gothic tracking-wide whitespace-nowrap border transition-all duration-200 shrink-0"
+        :class="sortOption === tab.value
+          ? 'bg-gothic-shadow border-primary-700 text-primary-400 shadow-crimson-sm'
+          : 'bg-transparent border-gothic-stone/50 text-gothic-ash hover:text-gothic-bone hover:border-gothic-stone'"
+      >
+        <component :is="tab.icon" class="w-3.5 h-3.5" />
+        {{ tab.label }}
+      </button>
+
+      <div class="ml-auto shrink-0 text-gothic-ash/60 text-xs tracking-widest uppercase font-gothic whitespace-nowrap">
+        <span v-if="total > 0">{{ total.toLocaleString() }} videos</span>
+        <span v-else-if="pending">Loading…</span>
       </div>
+    </div>
 
-      <VideoGrid
-        :videos="videos"
-        :loading="pending"
-        :current-page="page"
-        :total-pages="totalPages"
-        @page-change="handlePageChange"
+    <!-- PAGE TITLE -->
+    <div class="mb-6">
+      <h1 class="font-gothic text-2xl tracking-widest text-gothic-ivory">
+        <span v-if="searchQuery">
+          Results for
+          <span class="text-primary-400">"{{ searchQuery }}"</span>
+        </span>
+        <span v-else>{{ currentTab?.label }}</span>
+      </h1>
+    </div>
+
+    <!-- VIDEO GRID — TikTok portrait ratio -->
+    <div v-if="pending && videos.length === 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      <div
+        v-for="n in 18"
+        :key="n"
+        class="aspect-[9/16] bg-gothic-shadow rounded-xl animate-pulse border border-gothic-stone/30"
       />
-    </section>
+    </div>
 
-    <section v-if="!searchQuery && videos.length > 0" class="mt-16">
-      <h2 class="text-2xl font-bold text-white mb-8">Featured Collections</h2>
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div class="card p-6 group cursor-pointer" @click="navigateToSearch('music')">
-          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 18V5l12-2v13"/>
-              <circle cx="6" cy="18" r="3"/>
-              <circle cx="18" cy="16" r="3"/>
-            </svg>
-          </div>
-          <h3 class="text-lg font-semibold text-white group-hover:text-purple-400 transition-colors">Music & Arts</h3>
-          <p class="text-gray-400 text-sm mt-2">Concerts, performances, and artistic collections</p>
-        </div>
+    <div v-else-if="videos.length === 0 && !pending" class="text-center py-24 text-gothic-ash">
+      <Film class="w-12 h-12 mx-auto mb-4 opacity-30" />
+      <p class="font-gothic tracking-widest text-lg">No videos found</p>
+    </div>
 
-        <div class="card p-6 group cursor-pointer" @click="navigateToSearch('documentary')">
-          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-              <polyline points="14 2 14 8 20 8"/>
-              <line x1="16" y1="13" x2="8" y2="13"/>
-              <line x1="16" y1="17" x2="8" y2="17"/>
-              <polyline points="10 9 9 9 8 9"/>
-            </svg>
-          </div>
-          <h3 class="text-lg font-semibold text-white group-hover:text-blue-400 transition-colors">Documentaries</h3>
-          <p class="text-gray-400 text-sm mt-2">Educational and informational films</p>
-        </div>
+    <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+      <NuxtLink
+        v-for="video in videos"
+        :key="video.id"
+        :to="`/watch/${video.id}`"
+        class="group relative block"
+      >
+        <!-- Portrait card -->
+        <div class="relative aspect-[9/16] rounded-xl overflow-hidden bg-gothic-shadow border border-gothic-stone/30 group-hover:border-primary-700/60 transition-all duration-300 group-hover:shadow-crimson-sm">
 
-        <div class="card p-6 group cursor-pointer" @click="navigateToSearch('animation')">
-          <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-orange-500 to-yellow-500 flex items-center justify-center mb-4">
-            <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
-              <line x1="7" y1="2" x2="7" y2="22"/>
-              <line x1="17" y1="2" x2="17" y2="22"/>
-              <line x1="2" y1="12" x2="22" y2="12"/>
-              <line x1="2" y1="7" x2="7" y2="7"/>
-              <line x1="2" y1="17" x2="7" y2="17"/>
-              <line x1="17" y1="17" x2="22" y2="17"/>
-              <line x1="17" y1="7" x2="22" y2="7"/>
-            </svg>
+          <!-- Thumbnail -->
+          <img
+            v-if="video.thumb_url"
+            :src="video.thumb_url"
+            :alt="video.title"
+            loading="lazy"
+            class="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+          />
+          <div v-else class="w-full h-full flex items-center justify-center bg-gothic-shadow">
+            <Film class="w-8 h-8 text-gothic-stone" />
           </div>
-          <h3 class="text-lg font-semibold text-white group-hover:text-orange-400 transition-colors">Animation</h3>
-          <p class="text-gray-400 text-sm mt-2">Classic and modern animated works</p>
+
+          <!-- Gradient overlay -->
+          <div class="absolute inset-0 bg-gradient-to-t from-gothic-void via-gothic-void/20 to-transparent" />
+
+          <!-- Play button -->
+          <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div class="w-12 h-12 rounded-full bg-primary-700/80 backdrop-blur-sm flex items-center justify-center shadow-crimson">
+              <Play class="w-5 h-5 text-white fill-white ml-0.5" />
+            </div>
+          </div>
+
+          <!-- Bottom info -->
+          <div class="absolute bottom-0 left-0 right-0 p-2.5">
+            <p class="text-gothic-bone text-xs font-semibold leading-tight line-clamp-2">{{ video.title }}</p>
+            <div class="flex items-center justify-between mt-1.5">
+              <span class="text-gothic-ash/70 text-[10px] truncate">{{ video.creator }}</span>
+              <div class="flex items-center gap-0.5 text-gothic-ash/60 text-[10px] shrink-0">
+                <Download class="w-2.5 h-2.5" />
+                {{ formatCount(video.downloads) }}
+              </div>
+            </div>
+          </div>
         </div>
+      </NuxtLink>
+    </div>
+
+    <!-- PAGINATION -->
+    <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-10">
+      <button
+        @click="handlePageChange(page - 1)"
+        :disabled="page <= 1"
+        class="p-2 rounded-lg border border-gothic-stone/50 text-gothic-ash hover:text-gothic-bone hover:border-gothic-stone disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+      >
+        <ChevronLeft class="w-4 h-4" />
+      </button>
+
+      <div class="flex items-center gap-1">
+        <button
+          v-for="p in visiblePages"
+          :key="p"
+          @click="handlePageChange(p)"
+          class="w-8 h-8 rounded-lg text-xs font-gothic border transition-all duration-200"
+          :class="p === page
+            ? 'bg-primary-700 border-primary-600 text-white shadow-crimson-sm'
+            : 'border-gothic-stone/50 text-gothic-ash hover:text-gothic-bone hover:border-gothic-stone'"
+        >
+          {{ p }}
+        </button>
       </div>
-    </section>
 
-    <section v-if="!searchQuery" class="mt-16 p-8 rounded-2xl bg-gradient-to-br from-purple-900/30 to-pink-900/30 border border-purple-500/20">
-      <div class="max-w-2xl mx-auto text-center">
-        <h2 class="text-2xl font-bold text-white mb-4">About ReelVibe</h2>
-        <p class="text-gray-300 leading-relaxed">
-          ReelVibe is a modern video streaming platform powered by the Internet Archive.
-          Browse thousands of free movies, documentaries, music videos, and more — all legally available and
-          streamed directly from archive.org.
+      <button
+        @click="handlePageChange(page + 1)"
+        :disabled="page >= totalPages"
+        class="p-2 rounded-lg border border-gothic-stone/50 text-gothic-ash hover:text-gothic-bone hover:border-gothic-stone disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+      >
+        <ChevronRight class="w-4 h-4" />
+      </button>
+    </div>
+
+    <!-- ABOUT SECTION -->
+    <section v-if="!searchQuery" class="mt-16 p-8 rounded-2xl bg-gothic-shadow border border-gothic-stone/40 relative overflow-hidden">
+      <div class="absolute inset-0 bg-blood-fade opacity-20 pointer-events-none" />
+      <div class="relative max-w-2xl mx-auto text-center">
+        <Skull class="w-6 h-6 text-primary-700 mx-auto mb-4" />
+        <h2 class="font-gothic text-xl tracking-widest text-gothic-ivory mb-3">About ReelVibe</h2>
+        <p class="text-gothic-ash text-sm leading-relaxed">
+          A modern streaming platform powered by the Internet Archive.
+          Browse thousands of free movies, documentaries, music videos, and more —
+          all legally available and streamed directly from archive.org.
         </p>
-        <div class="flex justify-center gap-8 mt-8">
+        <div class="flex justify-center gap-10 mt-8">
           <div class="text-center">
-            <div class="text-3xl font-bold text-purple-400">{{ total.toLocaleString() }}</div>
-            <div class="text-sm text-gray-400">Videos</div>
+            <div class="font-gothic text-2xl text-primary-400">{{ total.toLocaleString() }}</div>
+            <div class="text-xs text-gothic-ash/60 tracking-widest uppercase mt-0.5">Videos</div>
           </div>
           <div class="text-center">
-            <div class="text-3xl font-bold text-pink-400">{{ (total * 0.1).toLocaleString() }}K+</div>
-            <div class="text-sm text-gray-400">Creators</div>
+            <div class="font-gothic text-2xl text-gothic-fog">100%</div>
+            <div class="text-xs text-gothic-ash/60 tracking-widest uppercase mt-0.5">Free</div>
           </div>
           <div class="text-center">
-            <div class="text-3xl font-bold text-blue-400">100%</div>
-            <div class="text-sm text-gray-400">Free</div>
+            <div class="font-gothic text-2xl text-gothic-bone">Legal</div>
+            <div class="text-xs text-gothic-ash/60 tracking-widest uppercase mt-0.5">Archive</div>
           </div>
         </div>
       </div>
     </section>
+
   </div>
 </template>
 
 <script setup lang="ts">
+import { Film, Play, Download, ChevronLeft, ChevronRight, Compass, Flame, Clock, Skull } from 'lucide-vue-next'
+
+// ── SEO ────────────────────────────────────────────────────────────────────
+useHead({
+  title: 'ReelVibe - Free Archive Video Streaming',
+  meta: [
+    { name: 'description', content: 'Browse popular videos from Internet Archive. Stream free movies, documentaries, music videos, and more.' },
+    { property: 'og:title', content: 'ReelVibe - Free Archive Video Streaming' },
+    { property: 'og:description', content: 'Browse popular videos from Internet Archive. Stream free movies, documentaries, and more.' },
+    { property: 'og:type', content: 'website' },
+    { property: 'og:url', content: 'https://reelvibe.com' },
+    { name: 'twitter:card', content: 'summary_large_image' },
+    { name: 'twitter:title', content: 'ReelVibe - Free Archive Video Streaming' },
+    { name: 'twitter:description', content: 'Browse popular videos from Internet Archive. Stream free, legal movies, documentaries, and more.' },
+    { name: 'robots', content: 'index, follow' },
+  ],
+  link: [
+    { rel: 'canonical', href: 'https://reelvibe.com' },
+  ],
+})
+
+// ── Structured Data (JSON-LD) ──────────────────────────────────────────────
+useHead({
+  script: [
+    {
+      type: 'application/ld+json',
+      innerHTML: JSON.stringify({
+        '@context': 'https://schema.org',
+        '@type': 'WebSite',
+        name: 'ReelVibe',
+        url: 'https://reelvibe.com',
+        description: 'Free archive video streaming platform powered by the Internet Archive.',
+        potentialAction: {
+          '@type': 'SearchAction',
+          target: {
+            '@type': 'EntryPoint',
+            urlTemplate: 'https://reelvibe.com/?search={search_term_string}',
+          },
+          'query-input': 'required name=search_term_string',
+        },
+      }),
+    },
+  ],
+})
+
+// ── State ──────────────────────────────────────────────────────────────────
 const route = useRoute()
 const router = useRouter()
 
@@ -129,15 +219,37 @@ const pending = ref(false)
 const limit = 20
 const totalPages = computed(() => Math.ceil(total.value / limit))
 
-const sortLabel = computed(() => {
-  switch (sortOption.value) {
-    case 'downloads': return 'Popular Videos'
-    case 'created_at': return 'Recently Added'
-    case 'title': return 'Alphabetical'
-    default: return 'All Videos'
+const sortTabs = [
+  { value: 'downloads', label: 'Popular',  icon: Flame   },
+  { value: 'created_at', label: 'Recent',  icon: Clock   },
+  { value: 'title',      label: 'A–Z',     icon: Compass },
+]
+
+const currentTab = computed(() => sortTabs.find(t => t.value === sortOption.value))
+
+const visiblePages = computed(() => {
+  const total = totalPages.value
+  const current = page.value
+  const delta = 2
+  const range: number[] = []
+  for (let i = Math.max(1, current - delta); i <= Math.min(total, current + delta); i++) {
+    range.push(i)
   }
+  return range
 })
 
+const formatCount = (n: number) => {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + 'M'
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + 'K'
+  return n?.toString() ?? '0'
+}
+
+const setSortOption = (val: string) => {
+  sortOption.value = val
+  router.replace({ query: { ...route.query, sort: val } })
+}
+
+// ── Data ───────────────────────────────────────────────────────────────────
 const { fetchVideos } = useVideos()
 
 const loadVideos = async () => {
@@ -148,8 +260,8 @@ const loadVideos = async () => {
       videos.value = result.data
       total.value = result.total || 0
     }
-  } catch (error) {
-    console.error('Failed to load videos:', error)
+  } catch (e) {
+    console.error('Failed to load videos:', e)
   } finally {
     pending.value = false
   }
@@ -161,16 +273,15 @@ const handlePageChange = (newPage: number) => {
   window.scrollTo({ top: 0, behavior: 'smooth' })
 }
 
-const navigateToSearch = (query: string) => {
-  router.push(`/?search=${encodeURIComponent(query)}`)
-}
-
 watch([searchQuery, sortOption], () => {
   page.value = 1
   loadVideos()
 })
 
-onMounted(() => {
-  loadVideos()
-})
+onMounted(loadVideos)
 </script>
+
+<style scoped>
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+</style>
